@@ -11,7 +11,7 @@ of 100 clothing-product descriptions using:
 -   Ordered proximity search
 -   Command-line and Streamlit interfaces
 -   Automated evaluation and comparison tests
--   Explainable clothing-domain query expansion (Novelty)
+-   Explainable clothing-domain query expansion (Novelty).
 
 ## GitHub Repository
 
