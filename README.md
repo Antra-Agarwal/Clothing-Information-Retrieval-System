@@ -918,7 +918,3 @@ The project demonstrates:
 The novelty feature improves search flexibility by considering related
 clothing vocabulary while preserving the original query terms and
 explaining why each document was retrieved.
-
-The implementation is organized so that the generated indexes, source
-code, tests, screenshots, and documentation can be submitted together as
-the final assignment deliverable.
