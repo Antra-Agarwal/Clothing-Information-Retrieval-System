@@ -155,6 +155,16 @@ def build_document_vectors(inverted_index):
     return document_vectors
 
 
+def get_document_vectors(inverted_index=None):
+    """
+    Get normalized document vectors for the corpus.
+    """
+    if inverted_index is None:
+        inverted_index = load_inverted_index()
+
+    return build_document_vectors(inverted_index)
+
+
 def build_query_vector(query, inverted_index):
     """
     Build a normalized query vector using ltc weighting.

@@ -1,7 +1,7 @@
 ================================================================================
 CLOTHING INFORMATION RETRIEVAL - TEST RESULTS
 ================================================================================
-Generated: 2026-09-12 15:38:24
+Generated: 2026-09-18 11:15:56
 
 ================================================================================
 PART B: FREE-TEXT VSM TESTS
@@ -280,3 +280,68 @@ Comparison Query: winter wear
 VSM Result IDs: ['D058', 'D018', 'D078', 'D038', 'D098', 'D010', 'D070', 'D028', 'D088', 'D030']
 Exact Phrase IDs: ['D008', 'D010', 'D018', 'D020', 'D028', 'D030', 'D038', 'D040', 'D048', 'D050', 'D058', 'D060', 'D068', 'D070', 'D078', 'D080', 'D088', 'D090', 'D098', 'D100']
 Observation: Positional information changes the result set/order because VSM only considers term occurrence and weights, whereas phrase retrieval requires consecutive term positions.
+
+================================================================================
+NOVELTY: RELEVANCE FEEDBACK (ROCCHIO) TESTS
+================================================================================
+
+Rocchio Test 1: Normal Case (Query: 'cotton shirt')
+Relevant Docs Selected: ['D002']
+Non-Relevant Docs Selected: ['D001']
+Feedback Status: Query refined using 1 relevant and 1 non-relevant selection(s).
+--------------------------------------------------------------------------------
+ORIGINAL TOP 5:
+1. D022 | Men's Checked Cotton Shirt - White | Shirt | score=0.2624
+2. D082 | Men's Checked Cotton Shirt - Blue | Shirt | score=0.2624
+3. D001 | Men's Cotton Crew Neck T-Shirt - Black | T-Shirt | score=0.2613
+4. D041 | Men's Cotton Crew Neck T-Shirt - Maroon | T-Shirt | score=0.2613
+5. D061 | Men's Cotton Crew Neck T-Shirt - White | T-Shirt | score=0.2613
+
+REFINED TOP 5:
+1. D002 | Men's Checked Cotton Shirt - Black | Shirt | score=0.6809
+2. D062 | Men's Checked Cotton Shirt - Olive | Shirt | score=0.6606
+3. D022 | Men's Checked Cotton Shirt - White | Shirt | score=0.6443
+4. D082 | Men's Checked Cotton Shirt - Blue | Shirt | score=0.6443
+5. D042 | Men's Checked Cotton Shirt - Maroon | Shirt | score=0.6346
+Observation: Relevant document D002 moved from rank 8 to rank 1, confirming query vector shift toward the relevant cluster.
+
+Rocchio Test 2: No-Selection Edge Case (Query: 'cotton shirt')
+Relevant Docs: [], Non-Relevant Docs: []
+Feedback Status: No feedback selections provided; ranking unchanged.
+Ranking Unchanged: True
+Observation: When no feedback is provided, the system safely retains the original ranking without error.
+
+Rocchio Test 3: All-Relevant Feedback (Query: 'cotton shirt')
+Relevant Docs: ['D022', 'D082', 'D001'], Non-Relevant Docs: []
+Feedback Status: Query refined using 3 relevant and 0 non-relevant selection(s).
+--------------------------------------------------------------------------------
+REFINED TOP 5:
+1. D022 | Men's Checked Cotton Shirt - White | Shirt | score=0.6818
+2. D082 | Men's Checked Cotton Shirt - Blue | Shirt | score=0.6818
+3. D002 | Men's Checked Cotton Shirt - Black | Shirt | score=0.6659
+4. D042 | Men's Checked Cotton Shirt - Maroon | Shirt | score=0.6611
+5. D062 | Men's Checked Cotton Shirt - Olive | Shirt | score=0.6580
+Observation: Relevant documents are reinforced with beta=0.75 and gamma=0.
+
+Rocchio Test 4: All-Non-Relevant Feedback (Query: 'cotton shirt')
+Relevant Docs: [], Non-Relevant Docs: ['D022', 'D082', 'D001']
+Feedback Status: Query refined using 0 relevant and 3 non-relevant selection(s).
+--------------------------------------------------------------------------------
+REFINED TOP 5:
+1. D022 | Men's Checked Cotton Shirt - White | Shirt | score=0.2604
+2. D082 | Men's Checked Cotton Shirt - Blue | Shirt | score=0.2604
+3. D001 | Men's Cotton Crew Neck T-Shirt - Black | T-Shirt | score=0.2589
+4. D041 | Men's Cotton Crew Neck T-Shirt - Maroon | T-Shirt | score=0.2589
+5. D061 | Men's Cotton Crew Neck T-Shirt - White | T-Shirt | score=0.2589
+Observation: Non-relevant documents are penalized (gamma=0.15, beta=0).
+
+Rocchio Test 5: Sequential Multi-Round Feedback (Query: 'cotton shirt')
+Round 1: Query refined using 1 relevant and 1 non-relevant selection(s).
+Round 1 Top IDs: ['D062', 'D002', 'D022', 'D082', 'D042']
+Round 2: Query refined using 1 relevant and 1 non-relevant selection(s).
+Round 2 Top IDs: ['D042', 'D062', 'D022', 'D082', 'D002']
+Observation: Multi-round feedback seamlessly reformulates from current vector iteratively.
+
+Rocchio Test 6: Precedence Conflict Handling (D002 marked both)
+Feedback Status: Query refined using 1 relevant and 1 non-relevant selection(s).
+Observation: D002 was marked both relevant and non-relevant; non-relevant took precedence and execution degraded gracefully with no error.

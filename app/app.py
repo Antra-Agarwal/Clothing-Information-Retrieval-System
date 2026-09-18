@@ -11,12 +11,18 @@ if str(BASE_DIR) not in sys.path:
 
 
 from src.indexer import build_and_save
-from src.retrieval import load_indexes, rank_documents, smart_rank_documents
+from src.retrieval import (
+    load_indexes,
+    rank_documents,
+    smart_rank_documents,
+    build_query_vector
+)
 from src.positional_search import (
     exact_phrase_search,
     ordered_proximity_search,
     parse_proximity_query
 )
+from src.relevance_feedback import apply_relevance_feedback
 
 
 DATA_DIR = BASE_DIR / "data"
@@ -92,26 +98,127 @@ if mode == "Free-text VSM Search":
 
         if not query.strip():
             st.warning("Please enter a query.")
+            st.session_state.pop("vsm_active_query", None)
+            st.session_state.pop("vsm_original_results", None)
+            st.session_state.pop("vsm_feedback_rounds", None)
         else:
+            keys_to_clear = [
+                k for k in st.session_state if k.startswith("vsm_fb_")
+            ]
+            for k in keys_to_clear:
+                del st.session_state[k]
+
             results = rank_documents(
                 query,
                 inverted_index,
                 metadata
             )
+            q_vector = build_query_vector(query, inverted_index)
 
-            st.subheader("Top 10 Ranked Results")
+            st.session_state["vsm_active_query"] = query
+            st.session_state["vsm_original_results"] = results
+            st.session_state["vsm_current_vector"] = q_vector
+            st.session_state["vsm_feedback_rounds"] = []
 
-            if not results:
-                st.error(
-                    "No matching documents found. "
-                    "Try another query."
-                )
+    if st.session_state.get("vsm_active_query"):
+        orig_results = st.session_state.get("vsm_original_results", [])
+
+        if not orig_results:
+            st.error(
+                "No matching documents found. "
+                "Try another query."
+            )
+        else:
+            feedback_rounds = st.session_state.get("vsm_feedback_rounds", [])
+            round_count = len(feedback_rounds)
+
+            st.subheader("Original Results")
+
+            for rank, result in enumerate(orig_results, start=1):
+
+                with st.container(border=True):
+
+                    col1, col2, col3 = st.columns([1, 3.5, 2.5])
+
+                    with col1:
+                        st.metric(
+                            "Rank",
+                            rank
+                        )
+
+                        st.metric(
+                            "Cosine Score",
+                            f"{result['score']:.4f}"
+                        )
+
+                    with col2:
+                        st.markdown(
+                            f"### {result['title']}"
+                        )
+
+                        st.write(
+                            f"**Document ID:** "
+                            f"{result['doc_id']}"
+                        )
+
+                        st.write(
+                            f"**Category:** "
+                            f"{result['category']}"
+                        )
+
+                    with col3:
+                        st.write("**Relevance Feedback:**")
+                        st.radio(
+                            "Feedback",
+                            ["No opinion", "Relevant", "Not relevant"],
+                            horizontal=True,
+                            key=f"vsm_fb_{result['doc_id']}_r0",
+                            label_visibility="collapsed"
+                        )
+
+            if round_count == 0:
+                if st.button("Refine results with feedback", type="primary", key="btn_refine_initial"):
+                    rel_ids = []
+                    non_rel_ids = []
+                    for r in orig_results:
+                        val = st.session_state.get(f"vsm_fb_{r['doc_id']}_r0", "No opinion")
+                        if val == "Relevant":
+                            rel_ids.append(r["doc_id"])
+                        elif val == "Not relevant":
+                            non_rel_ids.append(r["doc_id"])
+
+                    if not rel_ids and not non_rel_ids:
+                        st.warning("Please mark at least one document as Relevant or Not relevant.")
+                    else:
+                        new_res, new_vec, msg = apply_relevance_feedback(
+                            current_query_vector=st.session_state["vsm_current_vector"],
+                            relevant_doc_ids=rel_ids,
+                            non_relevant_doc_ids=non_rel_ids,
+                            inverted_index=inverted_index,
+                            metadata=metadata,
+                            original_results=orig_results
+                        )
+                        st.session_state["vsm_current_vector"] = new_vec
+                        st.session_state["vsm_feedback_rounds"].append({
+                            "round": 1,
+                            "results": new_res,
+                            "message": f"Query refined using {len(rel_ids)} relevant and {len(non_rel_ids)} non-relevant selection(s) (round 1)."
+                        })
+                        st.rerun()
+
             else:
-                for rank, result in enumerate(results, start=1):
+                latest_round = feedback_rounds[-1]
+                latest_round_num = latest_round["round"]
+
+                st.markdown("---")
+                st.subheader(f"Refined Results (Round {latest_round_num})")
+                st.info(f"✓ {latest_round['message']}")
+
+                for rank, result in enumerate(latest_round["results"], start=1):
 
                     with st.container(border=True):
 
-                        col1, col2 = st.columns([1, 5])
+                        col1, col2, col3 = st.columns([1, 3.5, 2.5])
 
                         with col1:
                             st.metric(
@@ -138,6 +245,63 @@ if mode == "Free-text VSM Search":
                                 f"**Category:** "
                                 f"{result['category']}"
                             )
+
+                        with col3:
+                            st.write("**Relevance Feedback:**")
+                            st.radio(
+                                "Feedback",
+                                ["No opinion", "Relevant", "Not relevant"],
+                                horizontal=True,
+                                key=f"vsm_fb_{result['doc_id']}_r{latest_round_num}",
+                                label_visibility="collapsed"
+                            )
+
+                btn_col1, btn_col2 = st.columns([2, 5])
+
+                with btn_col1:
+                    if st.button("Refine again", type="primary", key=f"btn_refine_{latest_round_num}"):
+                        rel_ids = []
+                        non_rel_ids = []
+                        for r in latest_round["results"]:
+                            val = st.session_state.get(f"vsm_fb_{r['doc_id']}_r{latest_round_num}", "No opinion")
+                            if val == "Relevant":
+                                rel_ids.append(r["doc_id"])
+                            elif val == "Not relevant":
+                                non_rel_ids.append(r["doc_id"])
+
+                        if not rel_ids and not non_rel_ids:
+                            st.warning("Please mark at least one document as Relevant or Not relevant.")
+                        else:
+                            next_round = latest_round_num + 1
+                            new_res, new_vec, msg = apply_relevance_feedback(
+                                current_query_vector=st.session_state["vsm_current_vector"],
+                                relevant_doc_ids=rel_ids,
+                                non_relevant_doc_ids=non_rel_ids,
+                                inverted_index=inverted_index,
+                                metadata=metadata,
+                                original_results=latest_round["results"]
+                            )
+                            st.session_state["vsm_current_vector"] = new_vec
+                            st.session_state["vsm_feedback_rounds"].append({
+                                "round": next_round,
+                                "results": new_res,
+                                "message": f"Query refined using {len(rel_ids)} relevant and {len(non_rel_ids)} non-relevant selection(s) (round {next_round})."
+                            })
+                            st.rerun()
+
+                with btn_col2:
+                    if st.button("Reset feedback", key=f"btn_reset_{latest_round_num}"):
+                        keys_to_clear = [
+                            k for k in st.session_state if k.startswith("vsm_fb_")
+                        ]
+                        for k in keys_to_clear:
+                            del st.session_state[k]
+                        st.session_state["vsm_feedback_rounds"] = []
+                        st.session_state["vsm_current_vector"] = build_query_vector(
+                            st.session_state["vsm_active_query"],
+                            inverted_index
+                        )
+                        st.rerun()
 
 
 elif mode == "Exact Phrase Search":

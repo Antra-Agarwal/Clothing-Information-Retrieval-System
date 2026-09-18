@@ -149,6 +149,9 @@ similarity         required             required             and weight them
   `src/query_expansion.py`            Defines clothing synonyms and
                                       expands queries
 
+  `src/relevance_feedback.py`         Implements Rocchio relevance
+                                      feedback query reformulation
+
   `src/main.py`                       Command-line interface
 
   `app/app.py`                        Streamlit web interface
@@ -1353,6 +1356,7 @@ present:
 -   [ ] `src/retrieval.py`
 -   [ ] `src/positional_search.py`
 -   [ ] `src/query_expansion.py`
+-   [ ] `src/relevance_feedback.py`
 -   [ ] `src/main.py`
 -   [ ] `app/app.py`
 -   [ ] `data/inverted_index.json`
@@ -1396,3 +1400,72 @@ functionality.
 Overall, the project is both an implementation of core Information
 Retrieval techniques and a practical demonstration of how classical
 retrieval can be extended for a specific domain.
+
+------------------------------------------------------------------------
+
+## 26. Novelty Feature: Relevance Feedback (Rocchio Algorithm)
+
+### 26.1 Conceptual Motivation
+
+Standard Vector Space Model (VSM) queries often fail to capture nuanced
+user preferences with short keyword queries. Relevance Feedback allows
+users to interactively guide the search engine by indicating which
+retrieved documents align with their search intent and which do not.
+The system then adjusts the query vector dynamically using the classical
+Rocchio algorithm.
+
+### 26.2 Mathematical Formulation
+
+The Rocchio algorithm computes a modified query vector that moves closer
+to the centroid of relevant documents while moving away from the
+centroid of non-relevant documents:
+
+$$\vec{q}_{\text{new}} = \alpha \vec{q}_{\text{current}} + \beta \frac{1}{|D_r|} \sum_{d \in D_r} \vec{d} - \gamma \frac{1}{|D_{nr}|} \sum_{d \in D_{nr}} \vec{d}$$
+
+Where:
+-   $\vec{q}_{\text{current}}$ is the current normalized query vector.
+-   $D_r$ is the set of user-selected relevant documents.
+-   $D_{nr}$ is the set of user-selected non-relevant documents.
+-   $\vec{d}$ is the normalized $lnc$ document vector for document $d$.
+-   $\alpha = 1.0$ (weight assigned to original/current query).
+-   $\beta = 0.75$ (weight assigned to the relevant document centroid).
+-   $\gamma = 0.15$ (weight assigned to the non-relevant document centroid).
+
+Following standard IR principles:
+1.  Negative weights are clamped to zero ($\max(0, w)$) to ensure terms
+    not in relevant documents do not invert similarity scoring.
+2.  The resulting vector is normalized using Euclidean ($L_2$)
+    normalization:
+
+$$\vec{q}_{\text{norm}} = \frac{\vec{q}_{\text{new}}}{\|\vec{q}_{\text{new}}\|}$$
+
+### 26.3 Architecture and Implementation
+
+-   **Backend (`src/relevance_feedback.py`)**: Reuses the core vector
+    construction and cosine similarity functions from `src/retrieval.py`
+    without code duplication or external machine learning libraries.
+-   **Sequential Feedback Support**: The function accepts
+    `current_query_vector`, enabling multi-round iterative refinement.
+-   **Robust Edge-Case Handling**:
+    -   *No selection*: Returns original ranking unchanged with an
+        explanatory status.
+    -   *Relevant only*: Sets $\gamma=0$, boosting relevant terms.
+    -   *Non-relevant only*: Sets $\beta=0$, penalizing non-relevant terms.
+    -   *Conflicting selection*: If a document is marked both relevant and
+        non-relevant, non-relevant takes precedence without throwing an
+        exception.
+    -   *Zero-magnitude safeguard*: Safely falls back to the previous
+        vector if penalization reduces the query vector magnitude to zero.
+
+### 26.4 Streamlit User Interface Integration
+
+Under Free-Text VSM Search in `app/app.py`:
+-   Each of the top 10 search results contains an interactive 3-way radio
+    selector (`No opinion`, `Relevant`, `Not relevant`).
+-   Selections are persisted across Streamlit reruns via `st.session_state`.
+-   Clicking "Refine results with feedback" computes Rocchio
+    reformulation and displays the refined top 10 results below the
+    original list for side-by-side comparison.
+-   Users can iteratively refine results ("Refine again") or clear the
+    feedback state ("Reset feedback") to return to the initial ranking.
+

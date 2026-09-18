@@ -173,6 +173,7 @@ Clothing_IR_Assignment/
 │   ├── positional_search.py
 │   ├── preprocess.py
 │   ├── query_expansion.py
+│   ├── relevance_feedback.py
 │   └── retrieval.py
 │
 ├── tests/
@@ -868,6 +869,9 @@ explanations for retrieved results.
   `src/query_expansion.py`            Clothing synonym dictionary and
                                       query expansion
 
+  `src/relevance_feedback.py`         Rocchio relevance feedback query
+                                      reformulation and re-ranking
+
   `src/positional_search.py`          Exact phrase and ordered proximity
                                       retrieval
 
@@ -918,3 +922,58 @@ The project demonstrates:
 The novelty feature improves search flexibility by considering related
 clothing vocabulary while preserving the original query terms and
 explaining why each document was retrieved.
+
+------------------------------------------------------------------------
+
+## 22. Novelty Feature: Relevance Feedback (Rocchio Algorithm)
+
+The system includes an interactive Relevance Feedback feature based on
+the classical Rocchio algorithm. Users can evaluate initial free-text
+VSM search results by marking products as Relevant or Not Relevant,
+allowing the system to reformulate the query vector and re-rank the
+corpus.
+
+### How It Works
+
+1.  The user executes a standard Free-Text VSM query.
+2.  The initial top 10 results are displayed with an interactive feedback
+    selector for each item (`No opinion`, `Relevant`, `Not relevant`).
+3.  The user marks one or more relevant and/or non-relevant documents.
+4.  The system applies the standard Rocchio query vector reformulation
+    formula:
+
+$$\vec{q}_{\text{new}} = \alpha \vec{q}_{\text{current}} + \beta \frac{1}{|D_r|} \sum_{d \in D_r} \vec{d} - \gamma \frac{1}{|D_{nr}|} \sum_{d \in D_{nr}} \vec{d}$$
+
+Where:
+-   $\vec{q}_{\text{current}}$ is the current normalized query vector.
+-   $D_r$ is the set of user-selected relevant documents.
+-   $D_{nr}$ is the set of user-selected non-relevant documents.
+-   $\vec{d}$ is the normalized $lnc$ document vector for document $d$.
+-   $\alpha = 1.0$ (original query weight).
+-   $\beta = 0.75$ (relevant document centroid weight).
+-   $\gamma = 0.15$ (non-relevant document centroid weight).
+
+5.  Negative term weights are clipped to zero ($\max(0, w)$) following
+    standard Information Retrieval practice.
+6.  The reformulated vector is normalized using Euclidean normalization.
+7.  All documents in the corpus are re-ranked using cosine similarity
+    against the new vector.
+8.  The refined top 10 results are displayed alongside the original
+    ranking for transparent before/after comparison.
+9.  The user can perform multiple sequential feedback rounds ("Refine
+    again") or revert to the initial ranking using "Reset feedback".
+
+### Edge Cases Handled
+
+-   **No Feedback Selected**: Returns the original ranking unchanged with
+    a clear informational notice.
+-   **Only Relevant Documents Selected**: $\beta$ term activates, $\gamma$
+    term is set to 0.
+-   **Only Non-Relevant Documents Selected**: $\gamma$ term activates, $\beta$
+    term is set to 0.
+-   **Precedence Conflict**: If a document is marked both relevant and
+    non-relevant, non-relevant takes precedence without error.
+-   **Zero-Magnitude Vector**: If penalization eliminates all terms, the
+    system safely preserves the previous query vector to prevent division
+    by zero.
+
